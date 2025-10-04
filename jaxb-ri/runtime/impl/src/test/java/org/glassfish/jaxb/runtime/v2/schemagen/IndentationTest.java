@@ -19,7 +19,9 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 import junit.framework.TestCase;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Test case for issue #1645: Indentation of JAXB_FORMATTED_OUTPUT was limited to eight levels.
@@ -189,6 +191,9 @@ public class IndentationTest extends TestCase {
     /**
      * Test that verifies indentation works correctly for deep nesting (>8 levels).
      * This is the primary test for issue #1645.
+     * 
+     * This test uses ByteArrayOutputStream to ensure the bug manifests when using streams,
+     * as the IndentingUTF8XmlOutput is specifically designed for OutputStream.
      */
     @Test
     public void testDeepIndentation() throws Exception {
@@ -205,15 +210,17 @@ public class IndentationTest extends TestCase {
         Level1 level1 = new Level1(level2);
         Level0 level0 = new Level0(level1);
 
-        // Marshal with formatted output
+        // Marshal with formatted output to ByteArrayOutputStream (uses UTF8XmlOutput path)
         JAXBContext jc = JAXBContext.newInstance(Level0.class);
         Marshaller marshaller = jc.createMarshaller();
         marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-        StringWriter resultWriter = new StringWriter();
-        marshaller.marshal(level0, resultWriter);
-
-        String result = resultWriter.toString();
-        System.out.println("Test output:");
+        
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        marshaller.marshal(level0, byteStream);
+        
+        // Convert bytes to String using UTF-8
+        String result = byteStream.toString(StandardCharsets.UTF_8.name());
+        System.out.println("Test output (ByteArrayOutputStream):");
         System.out.println(result);
 
         // Verify the structure has proper indentation
@@ -251,10 +258,23 @@ public class IndentationTest extends TestCase {
         // Content should have 44 spaces (11 * 4)
         assertTrue("Content should be indented with 44 spaces", 
                    result.contains("\n                                            <content>"));
+        
+        // Compare with StringWriter result to ensure consistency
+        StringWriter stringWriter = new StringWriter();
+        marshaller.marshal(level0, stringWriter);
+        String writerResult = stringWriter.toString();
+        
+        System.out.println("\nTest output (StringWriter):");
+        System.out.println(writerResult);
+        
+        // Both outputs should be identical
+        assertEquals("ByteArrayOutputStream and StringWriter should produce identical output", 
+                     writerResult, result);
     }
 
     /**
      * Test indentation at exactly 8 levels (boundary condition).
+     * Uses ByteArrayOutputStream to test the UTF8 output path.
      */
     @Test
     public void testEightLevelIndentation() throws Exception {
@@ -272,20 +292,34 @@ public class IndentationTest extends TestCase {
         JAXBContext jc = JAXBContext.newInstance(Level0.class);
         Marshaller marshaller = jc.createMarshaller();
         marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-        StringWriter resultWriter = new StringWriter();
-        marshaller.marshal(level0, resultWriter);
-
-        String result = resultWriter.toString();
-        System.out.println("8-level test output:");
+        
+        // Test with ByteArrayOutputStream
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        marshaller.marshal(level0, byteStream);
+        String result = byteStream.toString(StandardCharsets.UTF_8.name());
+        
+        System.out.println("8-level test output (ByteArrayOutputStream):");
         System.out.println(result);
 
         // Level 8 should have 32 spaces (8 * 4)
         assertTrue("Level 8 should be indented with 32 spaces", 
                    result.contains("\n                                <level8"));
+        
+        // Compare with StringWriter result
+        StringWriter stringWriter = new StringWriter();
+        marshaller.marshal(level0, stringWriter);
+        String writerResult = stringWriter.toString();
+        
+        System.out.println("\n8-level test output (StringWriter):");
+        System.out.println(writerResult);
+        
+        assertEquals("ByteArrayOutputStream and StringWriter should produce identical output", 
+                     writerResult, result);
     }
 
     /**
      * Test indentation with 16 levels (double the buffer size).
+     * Uses ByteArrayOutputStream to test the UTF8 output path.
      */
     @Test
     public void testSixteenLevelIndentation() throws Exception {
@@ -298,11 +332,13 @@ public class IndentationTest extends TestCase {
         JAXBContext jc = JAXBContext.newInstance(Node.class);
         Marshaller marshaller = jc.createMarshaller();
         marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-        StringWriter resultWriter = new StringWriter();
-        marshaller.marshal(node, resultWriter);
-
-        String result = resultWriter.toString();
-        System.out.println("16-level test output (first 2000 chars):");
+        
+        // Test with ByteArrayOutputStream
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        marshaller.marshal(node, byteStream);
+        String result = byteStream.toString(StandardCharsets.UTF_8.name());
+        
+        System.out.println("16-level test output (ByteArrayOutputStream, first 2000 chars):");
         System.out.println(result.substring(0, Math.min(2000, result.length())));
 
         // Verify deep indentation at level 16
@@ -320,5 +356,16 @@ public class IndentationTest extends TestCase {
         }
         
         assertTrue("Should have at least 15 child elements", childCount >= 15);
+        
+        // Compare with StringWriter result
+        StringWriter stringWriter = new StringWriter();
+        marshaller.marshal(node, stringWriter);
+        String writerResult = stringWriter.toString();
+        
+        System.out.println("\n16-level test output (StringWriter, first 2000 chars):");
+        System.out.println(writerResult.substring(0, Math.min(2000, writerResult.length())));
+        
+        assertEquals("ByteArrayOutputStream and StringWriter should produce identical output", 
+                     writerResult, result);
     }
 }
